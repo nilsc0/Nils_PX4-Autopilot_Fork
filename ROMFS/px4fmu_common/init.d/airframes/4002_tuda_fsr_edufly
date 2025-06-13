@@ -19,8 +19,10 @@ param set-default CA_ROTOR1_PX -1
 param set-default CA_ROTOR1_PY -1
 param set-default CA_ROTOR2_PX 1
 param set-default CA_ROTOR2_PY -1
+param set-default CA_ROTOR2_KM -0.05
 param set-default CA_ROTOR3_PX -1
 param set-default CA_ROTOR3_PY 1
+param set-default CA_ROTOR3_KM -0.05
 
 # Motor and Controller Tuning
 param set-default MC_PITCHRATE_K 1.5000
@@ -29,39 +31,11 @@ param set-default MC_ROLLRATE_K 1.5000
 param set-default MC_ROLLRATE_D 0.0010
 
 
-param set-default PWM_AUX_FUNC1 102
-param set-default PWM_AUX_FUNC2 101
+param set-default PWM_AUX_FUNC1 101
+param set-default PWM_AUX_FUNC2 102
 param set-default PWM_AUX_FUNC3 103
 param set-default PWM_AUX_FUNC4 104
-param set-default PWM_AUX_MAX1 1900
-param set-default PWM_AUX_MAX2 1900
-param set-default PWM_AUX_MAX3 1900
-param set-default PWM_AUX_MAX4 1900
-param set-default PWM_AUX_MAX7 1900
-param set-default PWM_AUX_MAX8 1900
-param set-default PWM_AUX_MIN1 1100
-param set-default PWM_AUX_MIN2 1100
-param set-default PWM_AUX_MIN3 1100
-param set-default PWM_AUX_MIN4 1100
-param set-default PWM_AUX_MIN7 1100
-param set-default PWM_AUX_MIN8 1100
 param set-default PWM_AUX_TIM0 -3
-param set-default PWM_MAIN_FUNC1 102
-param set-default PWM_MAIN_FUNC2 101
-param set-default PWM_MAIN_FUNC7 103
-param set-default PWM_MAIN_FUNC8 104
-param set-default PWM_MAIN_MAX1 1900
-param set-default PWM_MAIN_MAX2 1900
-param set-default PWM_MAIN_MAX3 1900
-param set-default PWM_MAIN_MAX4 1900
-param set-default PWM_MAIN_MAX7 1900
-param set-default PWM_MAIN_MAX8 1900
-param set-default PWM_MAIN_MIN1 1100
-param set-default PWM_MAIN_MIN2 1100
-param set-default PWM_MAIN_MIN3 1100
-param set-default PWM_MAIN_MIN4 1100
-param set-default PWM_MAIN_MIN7 1100
-param set-default PWM_MAIN_MIN8 1100
 param set-default THR_MDL_FAC 0.3000
 
 param set-default MPC_THR_HOVER 0.3500
@@ -113,3 +87,7 @@ param set-default COM_FLTMODE6 7
 
 # Miscellaneous
 param set-default RTL_LAND_DELAY 0.0000
+param set-default COM_RC_LOSS_T 1.0000
+param set-default GF_ACTION 3
+param set-default MAN_ARM_GESTURE 0
+param set-default MPC_XY_VEL_MAX 2.0000
