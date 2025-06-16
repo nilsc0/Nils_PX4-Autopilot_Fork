@@ -13,15 +13,15 @@
 # Square quadrotor X PX4 numbering
 TODO: Adjust for correct distances
 param set-default CA_ROTOR_COUNT 4
-param set-default CA_ROTOR0_PX 1
-param set-default CA_ROTOR0_PY 1
-param set-default CA_ROTOR1_PX -1
-param set-default CA_ROTOR1_PY -1
-param set-default CA_ROTOR2_PX 1
-param set-default CA_ROTOR2_PY -1
+param set-default CA_ROTOR0_PX 0.08
+param set-default CA_ROTOR0_PY 0.143
+param set-default CA_ROTOR1_PX -0.11
+param set-default CA_ROTOR1_PY -0.113
+param set-default CA_ROTOR2_PX 0.08
+param set-default CA_ROTOR2_PY -0.143
 param set-default CA_ROTOR2_KM -0.05
-param set-default CA_ROTOR3_PX -1
-param set-default CA_ROTOR3_PY 1
+param set-default CA_ROTOR3_PX -0.11
+param set-default CA_ROTOR3_PY 0.113
 param set-default CA_ROTOR3_KM -0.05
 
 # Motor and Controller Tuning
