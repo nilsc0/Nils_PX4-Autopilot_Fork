@@ -159,7 +159,7 @@ void RtlDirectMissionLand::setActiveMissionItems()
 	}
 
 	/* ### Disabled check for transition to FW for RTL_TYPE = 2 due to wrong mission data initialization
-	
+
 	else if (_vehicle_status_sub.get().vehicle_type == vehicle_status_s::VEHICLE_TYPE_ROTARY_WING &&
 		   _vehicle_status_sub.get().is_vtol &&
 		   !_land_detected_sub.get().landed && _work_item_type == WorkItemType::WORK_ITEM_TYPE_DEFAULT) {
