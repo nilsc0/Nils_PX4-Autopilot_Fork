@@ -470,6 +470,17 @@ struct msp_rendor_satellites_used_t {
 } __attribute__((packed));
 
 
+// MSP DisplayPort WRITE_STRING payload for speed readouts.
+struct msp_displayport_speed_t {
+	uint8_t subCommand = 3;
+	uint8_t screenYPosition;
+	uint8_t screenXPosition = 2;
+	uint8_t attributes = 0;
+	char str[16];
+} __attribute__((packed));
+
+static_assert(sizeof(msp_displayport_speed_t) == 20, "DisplayPort speed payload must contain a four-byte header");
+
 // MSP_COMP_GPS reply
 struct msp_comp_gps_t {
 	int16_t  distanceToHome;  // distance to home in meters

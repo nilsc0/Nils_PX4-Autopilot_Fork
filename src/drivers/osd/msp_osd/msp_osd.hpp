@@ -97,7 +97,8 @@ enum SymbolIndex : uint8_t {
 	CROSSHAIRS		= 18,
 	AVG_CELL_VOLTAGE	= 19,
 	HORIZON_SIDEBARS	= 20,
-	POWER			= 21
+	POWER			= 21,
+	AIRSPEED		= 22
 };
 
 class MspOsd : public ModuleBase<MspOsd>, public ModuleParams, public px4::ScheduledWorkItem
@@ -182,8 +183,8 @@ private:
 	char _device[64] {};
 	PerformanceData _performance_data{};
 
-	msp_set_vtx_config_t vtx_config;
-	msp_set_vtxtable_powerlevel_t power_levels[POWER_LEVEL_COUNT];
+	msp_set_vtx_config_t vtx_config{};
+	msp_set_vtxtable_powerlevel_t power_levels[POWER_LEVEL_COUNT] {};
 	msp_set_vtxtable_band_t vtx_bands[BAND_COUNT] {};
 	bool has_vtx_config {false};
 	bool has_power_config {false};

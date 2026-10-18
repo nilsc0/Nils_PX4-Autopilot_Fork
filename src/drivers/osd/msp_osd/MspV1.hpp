@@ -43,7 +43,7 @@ public:
 	int GetMessageSize(int message_type);
 	bool Send(const uint8_t message_id, const void *payload);
 	bool Send(const uint8_t message_id, const void *payload, uint32_t payload_size);
-	int Receive(uint8_t *payload, uint8_t *message_id);
+	int Receive(uint8_t *payload, uint8_t *message_id, uint32_t payload_capacity);
 
 private:
 	int _fd{-1};

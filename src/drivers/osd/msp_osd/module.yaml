@@ -15,6 +15,9 @@ parameters:
                 short: OSD Symbol Selection
                 long: |
                   Configure / toggle support display options.
+                  GPS_SPEED draws GPS ground speed (GS) in km/h.
+                  AIRSPEED draws indicated airspeed (IAS) in km/h.
+                  Speed readouts show --- when data is invalid or older than one second.
             type: bitmask
             bit:
                 0: CRAFT_NAME
@@ -40,7 +43,8 @@ parameters:
                 19: AVG_CELL_VOLTAGE
                 20: (unused) HORIZON_SIDEBARS
                 21: POWER
-            default: 16383
+                22: AIRSPEED
+            default: 4210687
 
         # OSD Crosshairs Vertical Position
         OSD_CH_HEIGHT:

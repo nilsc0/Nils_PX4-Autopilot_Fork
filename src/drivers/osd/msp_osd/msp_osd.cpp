@@ -42,6 +42,7 @@
 
 #include "msp_defines.h"
 
+#include <cstddef>
 #include <fcntl.h>
 #include <math.h>
 #include <unistd.h>
@@ -373,6 +374,11 @@ void MspOsd::Run()
 		sensor_gps_s vehicle_gps_position{};
 		_vehicle_gps_position_sub.copy(&vehicle_gps_position);
 
+		if (enabled(SymbolIndex::GPS_SPEED)) {
+			const auto msg = msp_osd::construct_displayport_ground_speed(vehicle_gps_position);
+			this->Send(MSP_CMD_DISPLAYPORT, &msg, 4 + strnlen(msg.str, sizeof(msg.str)));
+		}
+
 		if (enabled(SymbolIndex::GPS_LAT)) {
 			const auto msg = msp_osd::construct_rendor_GPS_LAT(vehicle_gps_position);
 			this->Send(MSP_CMD_DISPLAYPORT, &msg, sizeof(msp_rendor_latitude_t));
@@ -387,6 +393,13 @@ void MspOsd::Run()
 			const auto msg = msp_osd::construct_rendor_GPS_NUM(vehicle_gps_position);
 			this->Send(MSP_CMD_DISPLAYPORT, &msg, sizeof(msp_rendor_satellites_used_t));
 		}
+	}
+
+	if (enabled(SymbolIndex::AIRSPEED)) {
+		airspeed_validated_s airspeed{};
+		_airspeed_validated_sub.copy(&airspeed);
+		const auto msg = msp_osd::construct_displayport_airspeed(airspeed);
+		this->Send(MSP_CMD_DISPLAYPORT, &msg, 4 + strnlen(msg.str, sizeof(msg.str)));
 	}
 
 	// MSP_COMP_GPS
@@ -492,49 +505,69 @@ void MspOsd::Receive()
 {
 	uint8_t packet[255];
 	uint8_t message_id;
-	int ret;
 
-	while ((ret = _msp.Receive(packet, &message_id)) != -EWOULDBLOCK) {
-		if (ret >= 0) {
-			switch (message_id) {
+	// Bound work per update even if an external device continuously sends data.
+	for (unsigned packets = 0; packets < 8; ++packets) {
+		const int ret = _msp.Receive(packet, &message_id, sizeof(packet));
 
-			case MSP_SET_VTX_CONFIG: {
-					if (ret == 0xF) {
-						memcpy((void *)&vtx_config, packet, sizeof(vtx_config));
-						has_vtx_config = true;
-					}
+		if (ret < 0) {
+			break;
+		}
 
-					break;
-				}
-
-			case MSP_SET_VTXTABLE_BAND: {
-					msp_set_vtxtable_band_t *band_info = (msp_set_vtxtable_band_t *)&packet[0];
-
-					// Only supported fixed name lenght and < 8 channels for now
-					if (band_info->band <= BAND_COUNT && band_info->band_name_length == 8 && band_info->channel_count <= 8) {
-						memcpy((void *)&vtx_bands[band_info->band - 1], packet, sizeof(msp_set_vtxtable_band_t));
-
-						if (has_vtx_config && band_info->band == vtx_config.band_count) {
-							has_vtx_bands = true;
-						}
-					}
-
-					break;
-				}
-
-			case MSP_SET_VTXTABLE_POWERLEVEL: {
-					if ((packet[0] - 1) < POWER_LEVEL_COUNT) {
-						memcpy((void *)&power_levels[packet[0] - 1], packet, sizeof(msp_set_vtxtable_powerlevel_t));
-						has_power_config = true;
-					}
-
-					break;
-				}
-
-			default:
-				break;
-
+		switch (message_id) {
+		case MSP_SET_VTX_CONFIG:
+			if (ret == static_cast<int>(sizeof(vtx_config))) {
+				memcpy(&vtx_config, packet, sizeof(vtx_config));
+				has_vtx_config = true;
 			}
+
+			break;
+
+		case MSP_SET_VTXTABLE_BAND: {
+				constexpr size_t header_size = offsetof(msp_set_vtxtable_band_t, frequency);
+
+				if (ret < static_cast<int>(header_size) || ret > static_cast<int>(sizeof(msp_set_vtxtable_band_t))) {
+					break;
+				}
+
+				msp_set_vtxtable_band_t band_info{};
+				memcpy(&band_info, packet, ret);
+
+				if (band_info.band >= 1 && band_info.band <= BAND_COUNT
+				    && band_info.band_name_length == VTX_TABLE_BAND_NAME_LENGTH && band_info.channel_count <= 8
+				    && static_cast<size_t>(ret) >= header_size + band_info.channel_count * sizeof(uint16_t)) {
+					vtx_bands[band_info.band - 1] = band_info;
+
+					if (has_vtx_config && band_info.band == vtx_config.band_count) {
+						has_vtx_bands = true;
+					}
+				}
+
+				break;
+			}
+
+		case MSP_SET_VTXTABLE_POWERLEVEL: {
+				constexpr size_t header_size = offsetof(msp_set_vtxtable_powerlevel_t, power_label_name);
+
+				if (ret < static_cast<int>(header_size) || ret > static_cast<int>(sizeof(msp_set_vtxtable_powerlevel_t))) {
+					break;
+				}
+
+				msp_set_vtxtable_powerlevel_t power_info{};
+				memcpy(&power_info, packet, ret);
+
+				if (power_info.index >= 1 && power_info.index <= POWER_LEVEL_COUNT
+				    && power_info.power_label_length <= sizeof(power_info.power_label_name)
+				    && static_cast<size_t>(ret) >= header_size + power_info.power_label_length) {
+					power_levels[power_info.index - 1] = power_info;
+					has_power_config = true;
+				}
+
+				break;
+			}
+
+		default:
+			break;
 		}
 	}
 
@@ -623,7 +656,7 @@ int MspOsd::print_status()
 	if (has_vtx_config) {
 		PX4_INFO("=== VTX Configuration ===");
 
-		if (has_vtx_bands) {
+		if (has_vtx_bands && vtx_config.user_band >= 1 && vtx_config.user_band <= BAND_COUNT) {
 			PX4_INFO("Channel: %c%u", vtx_bands[vtx_config.user_band - 1].band_letter, vtx_config.user_channel);
 
 		} else {
@@ -633,7 +666,7 @@ int MspOsd::print_status()
 
 		PX4_INFO("Frequency: %u MHz", vtx_config.user_freq);
 
-		if (has_power_config && (vtx_config.power_level - 1) < POWER_LEVEL_COUNT) {
+		if (has_power_config && vtx_config.power_level >= 1 && vtx_config.power_level <= POWER_LEVEL_COUNT) {
 			PX4_INFO("Transmit power: %.*s mW", power_levels[vtx_config.power_level - 1].power_label_length,
 				 power_levels[vtx_config.power_level - 1].power_label_name);
 
@@ -679,7 +712,7 @@ int MspOsd::set_channel(char *new_channel)
 			if (band_letter == toupper(vtx_bands[i].band_letter)) {
 				int channel = atoi(&new_channel[1]);
 
-				if (channel > 0 && channel <= vtx_config.channel_count && vtx_bands[i].frequency[channel - 1] != 0) {
+				if (channel > 0 && channel <= vtx_bands[i].channel_count && channel <= 8 && vtx_bands[i].frequency[channel - 1] != 0) {
 					vtx_config.user_band = vtx_bands[i].band;
 					vtx_config.user_channel = channel;
 					vtx_config.user_freq = vtx_bands[i].frequency[channel - 1];

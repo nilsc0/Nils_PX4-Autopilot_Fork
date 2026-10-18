@@ -274,8 +274,13 @@ msp_rendor_battery_state_t construct_rendor_BATTERY_STATE(const battery_status_s
 }
 
 
-msp_raw_gps_t construct_RAW_GPS(const sensor_gps_s &vehicle_gps_position,
-				const airspeed_validated_s &airspeed_validated)
+static bool is_recent_speed_sample(uint64_t timestamp)
+{
+	const hrt_abstime now = hrt_absolute_time();
+	return timestamp != 0 && timestamp <= now && now - timestamp < 1_s;
+}
+
+msp_raw_gps_t construct_RAW_GPS(const sensor_gps_s &vehicle_gps_position)
 {
 	// initialize result
 	msp_raw_gps_t raw_gps {0};
@@ -319,16 +324,44 @@ msp_raw_gps_t construct_RAW_GPS(const sensor_gps_s &vehicle_gps_position,
 	//raw_gps.hdop = vehicle_gps_position_struct.hdop
 	raw_gps.numSat = vehicle_gps_position.satellites_used;
 
-	if (airspeed_validated.airspeed_source >= airspeed_validated_s::SOURCE_GROUND_MINUS_WIND
-	    && PX4_ISFINITE(airspeed_validated.indicated_airspeed_m_s)
-	    && airspeed_validated.indicated_airspeed_m_s > 0.f) {
-		raw_gps.groundSpeed = airspeed_validated.indicated_airspeed_m_s * 100;
-
-	} else {
-		raw_gps.groundSpeed = 0;
+	if (is_recent_speed_sample(vehicle_gps_position.timestamp)
+	    && vehicle_gps_position.fix_type >= 3 && vehicle_gps_position.vel_ned_valid
+	    && PX4_ISFINITE(vehicle_gps_position.vel_m_s) && vehicle_gps_position.vel_m_s >= 0.f) {
+		raw_gps.groundSpeed = static_cast<int16_t>(math::min(vehicle_gps_position.vel_m_s * 100.f, 32767.f));
 	}
 
 	return raw_gps;
+}
+
+static msp_displayport_speed_t construct_displayport_speed(const char *label, uint8_t row, float speed_m_s,
+		bool valid)
+{
+	msp_displayport_speed_t msg{};
+	msg.screenYPosition = row;
+
+	if (valid && PX4_ISFINITE(speed_m_s) && speed_m_s >= 0.f) {
+		snprintf(msg.str, sizeof(msg.str), "%s %5.1fkm/h", label,
+			 static_cast<double>(math::min(speed_m_s * 3.6f, 9999.9f)));
+
+	} else {
+		snprintf(msg.str, sizeof(msg.str), "%s   ---km/h", label);
+	}
+
+	return msg;
+}
+
+msp_displayport_speed_t construct_displayport_ground_speed(const sensor_gps_s &gps)
+{
+	const bool valid = is_recent_speed_sample(gps.timestamp)
+			   && gps.fix_type >= 3 && gps.vel_ned_valid;
+	return construct_displayport_speed("GS", 10, gps.vel_m_s, valid);
+}
+
+msp_displayport_speed_t construct_displayport_airspeed(const airspeed_validated_s &airspeed)
+{
+	const bool valid = is_recent_speed_sample(airspeed.timestamp)
+			   && airspeed.airspeed_source >= airspeed_validated_s::SOURCE_GROUND_MINUS_WIND;
+	return construct_displayport_speed("IAS", 11, airspeed.indicated_airspeed_m_s, valid);
 }
 
 msp_rendor_latitude_t construct_rendor_GPS_LAT(const sensor_gps_s &vehicle_gps_position)

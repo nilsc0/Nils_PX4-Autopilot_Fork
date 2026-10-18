@@ -81,7 +81,6 @@ const msp_message_descriptor_t msp_message_descriptors[MSP_DESCRIPTOR_COUNT] = {
 
 bool MspV1::Send(const uint8_t message_id, const void *payload)
 {
-	uint32_t payload_size = 0;
 
 	msp_message_descriptor_t *desc = nullptr;
 
@@ -100,33 +99,16 @@ bool MspV1::Send(const uint8_t message_id, const void *payload)
 		return false;
 	}
 
-	payload_size = desc->message_size;
-
-	uint8_t packet[MSP_FRAME_START_SIZE + payload_size + MSP_CRC_SIZE];
-	uint8_t crc;
-
-	packet[0] = '$';
-	packet[1] = 'M';
-	packet[2] = '>';
-	packet[3] = payload_size;
-	packet[4] = message_id;
-
-	crc = payload_size ^ message_id;
-
-	memcpy(packet + MSP_FRAME_START_SIZE, payload, payload_size);
-
-	for (uint32_t i = 0; i < payload_size; i ++) {
-		crc ^= packet[MSP_FRAME_START_SIZE + i];
-	}
-
-	packet[MSP_FRAME_START_SIZE + payload_size] = crc;
-
-	int packet_size =  MSP_FRAME_START_SIZE + payload_size + MSP_CRC_SIZE;
-	return  write(_fd, packet, packet_size) == packet_size;
+	return Send(message_id, payload, desc->message_size);
 }
 
 bool MspV1::Send(const uint8_t message_id, const void *payload, uint32_t payload_size)
 {
+	// MSPv1 has an eight-bit length field. Bound the stack allocation before use.
+	if (payload_size > UINT8_MAX || (payload_size != 0 && payload == nullptr)) {
+		return false;
+	}
+
 	uint8_t packet[MSP_FRAME_START_SIZE + payload_size + MSP_CRC_SIZE];
 	uint8_t crc;
 
@@ -138,7 +120,9 @@ bool MspV1::Send(const uint8_t message_id, const void *payload, uint32_t payload
 
 	crc = payload_size ^ message_id;
 
-	memcpy(packet + MSP_FRAME_START_SIZE, payload, payload_size);
+	if (payload_size != 0) {
+		memcpy(packet + MSP_FRAME_START_SIZE, payload, payload_size);
+	}
 
 	for (uint32_t i = 0; i < payload_size; i ++) {
 		crc ^= packet[MSP_FRAME_START_SIZE + i];
@@ -151,68 +135,85 @@ bool MspV1::Send(const uint8_t message_id, const void *payload, uint32_t payload
 }
 
 
-int MspV1::Receive(uint8_t *payload, uint8_t *message_id)
+int MspV1::Receive(uint8_t *payload, uint8_t *message_id, uint32_t payload_capacity)
 {
-	uint8_t payload_size;
-	uint8_t crc;
-	uint8_t calc_crc;
-	int ret;
+	if (message_id == nullptr) {
+		return -EINVAL;
+	}
 
-	while (!has_header) {
+	if (!has_header) {
 		int bytes_available = 0;
 
 		if (ioctl(_fd, FIONREAD, &bytes_available) < 0) {
 			return -EIO;
 		}
 
-		if (bytes_available < 5) {
-			return -EWOULDBLOCK;
-		}
+		// Limit resynchronization work so a noisy UART cannot monopolize the work queue.
+		unsigned scanned = 0;
 
-		while (bytes_available > 4) {
-			if ((ret = read(_fd, header, 1)) != 1) {
-				return ret;
+		while (bytes_available >= MSP_FRAME_START_SIZE && scanned < 32) {
+			if (read(_fd, header, 1) != 1) {
+				return -EIO;
 			}
 
-			bytes_available--;
+			--bytes_available;
+			++scanned;
 
-			if (header[0] == '$') {
-				break;
+			if (header[0] != '$') {
+				continue;
 			}
 
-		}
+			if (read(_fd, &header[1], MSP_FRAME_START_SIZE - 1) != MSP_FRAME_START_SIZE - 1) {
+				return -EIO;
+			}
 
-		if (header[0] != '$') {
-			return -EWOULDBLOCK;
-		}
+			if (header[1] != 'M' || header[2] != '<') {
+				return -EINVAL;
+			}
 
-		if ((ret = read(_fd, &header[1], 4)) != 4) {
-			return ret;
-		}
-
-		if (header[0] == '$' && header[1] == 'M' && header[2] == '<') {
 			has_header = true;
+			break;
+		}
+
+		if (!has_header) {
+			return -EWOULDBLOCK;
 		}
 	}
 
-	payload_size = header[3];
-	*message_id = header[4];
+	const uint8_t payload_size = header[3];
 
-	if ((ret = read(_fd, payload, payload_size + MSP_CRC_SIZE)) != payload_size + MSP_CRC_SIZE) {
-		if (ret != -EWOULDBLOCK) {
-			has_header = false;
-		}
+	if (payload_size > payload_capacity || (payload_size != 0 && payload == nullptr)) {
+		has_header = false;
+		return -EMSGSIZE;
+	}
 
-		return ret;
+	int bytes_available = 0;
+
+	if (ioctl(_fd, FIONREAD, &bytes_available) < 0) {
+		has_header = false;
+		return -EIO;
+	}
+
+	if (bytes_available < payload_size + MSP_CRC_SIZE) {
+		return -EWOULDBLOCK;
 	}
 
 	has_header = false;
 
-	crc = payload[payload_size];
+	if (payload_size != 0 && read(_fd, payload, payload_size) != payload_size) {
+		return -EIO;
+	}
 
-	calc_crc = payload_size ^ header[4];
+	// The CRC is not part of the caller's payload buffer.
+	uint8_t crc = 0;
 
-	for (int i = 0; i < payload_size; i++) {
+	if (read(_fd, &crc, 1) != 1) {
+		return -EIO;
+	}
+
+	uint8_t calc_crc = payload_size ^ header[4];
+
+	for (unsigned i = 0; i < payload_size; ++i) {
 		calc_crc ^= payload[i];
 	}
 
@@ -220,5 +221,6 @@ int MspV1::Receive(uint8_t *payload, uint8_t *message_id)
 		return -EINVAL;
 	}
 
+	*message_id = header[4];
 	return payload_size;
 }

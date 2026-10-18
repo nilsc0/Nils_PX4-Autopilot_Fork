@@ -92,8 +92,10 @@ msp_battery_state_t construct_BATTERY_STATE(const battery_status_s &battery_stat
 msp_rendor_battery_state_t construct_rendor_BATTERY_STATE(const battery_status_s &battery_status);
 
 // construct an MSP_RAW_GPS struct
-msp_raw_gps_t construct_RAW_GPS(const sensor_gps_s &vehicle_gps_position,
-				const airspeed_validated_s &airspeed_validated);
+msp_raw_gps_t construct_RAW_GPS(const sensor_gps_s &vehicle_gps_position);
+
+msp_displayport_speed_t construct_displayport_ground_speed(const sensor_gps_s &gps);
+msp_displayport_speed_t construct_displayport_airspeed(const airspeed_validated_s &airspeed);
 
 // construct an MSP_COMP_GPS struct
 msp_comp_gps_t construct_COMP_GPS(const home_position_s &home_position,
